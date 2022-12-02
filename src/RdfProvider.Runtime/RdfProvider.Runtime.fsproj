@@ -14,7 +14,7 @@
     <None Include="paket.references" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="4.7.2" />
+    <PackageReference Update="FSharp.Core" Version="6.0.7" />
     <ProjectReference Include="..\RdfProvider.DesignTime\RdfProvider.DesignTime.fsproj">
       <IsFSharpDesignTimeProvider>true</IsFSharpDesignTimeProvider>
       <PrivateAssets>all</PrivateAssets>

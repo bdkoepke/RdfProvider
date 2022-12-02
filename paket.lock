@@ -1,6 +1,6 @@
 NUGET
   remote: https://api.nuget.org/v3/index.json
-    FSharp.Core (4.7.2)
+    FSharp.Core (6.0.7)
 GITHUB
   remote: fsprojects/FSharp.TypeProviders.SDK
     src/ProvidedTypes.fs (6ad1174db0794a348f4a1c0aa5a60ae3f1803810)
