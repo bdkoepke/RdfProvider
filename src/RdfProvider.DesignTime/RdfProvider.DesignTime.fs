@@ -1,100 +1,165 @@
 module RdfProviderImplementation
 
 open System
-open System.Collections.Generic
-open System.IO
+open System.Collections.Concurrent
 open System.Reflection
-open FSharp.Quotations
 open FSharp.Core.CompilerServices
-open MyNamespace
+open RdfProvider.Schema
 open ProviderImplementation
 open ProviderImplementation.ProvidedTypes
 
-// Put any utility helpers here
-[<AutoOpen>]
-module internal Helpers =
-    let x = 1
+type NameSpace = private NameSpace of string
+
+module NameSpace =
+    let ofString = NameSpace
+    let toString (NameSpace nameSpace) = nameSpace
+
+type Documentation = private Documentation of string
+
+module Documentation =
+    let ofString = Documentation
+    let toString (Documentation documentation) = documentation
+
+type Label = private Label of string
+
+module Label =
+    let ofString = Label
+    let toString (Label label) = label
+
+type Name = private Name of string
+
+module Name =
+    let ofString = Name
+    let toString (Name name) = name
+
+type EnumerationError = Empty of Name: Name
+
+let internal createEnumerationType
+    (assembly: Assembly)
+    (nameSpace: NameSpace)
+    (name: Name)
+    (documentation: Documentation)
+    (enumerators: Map<Label, Documentation>)
+    =
+    match enumerators |> Map.toList with
+    | [] -> Error <| Empty(name)
+    | enumerators ->
+        let providedEnumType =
+            ProvidedTypeDefinition(
+                assembly,
+                NameSpace.toString nameSpace,
+                Name.toString name,
+                baseType = Some typeof<Enum>,
+                hideObjectMethods = true,
+                isErased = false
+            )
+
+        let description = Documentation.toString documentation
+        providedEnumType.AddXmlDoc(description)
+
+        enumerators
+        |> List.map (fun (label, description) ->
+            let label = Label.toString label
+            let providedField = ProvidedField.Literal(label, providedEnumType, label)
+            let description = Documentation.toString description
+
+            match description with
+            | "" -> ()
+            | _ -> providedField.AddXmlDoc(description)
+
+            providedField)
+        |> providedEnumType.AddMembers
+
+        providedEnumType |> Ok
 
 [<TypeProvider>]
-type BasicErasingProvider (config : TypeProviderConfig) as this =
-    inherit TypeProviderForNamespaces (config, assemblyReplacementMap=[("RdfProvider.DesignTime", "RdfProvider.Runtime")], addDefaultProbingLocation=true)
+type BasicGenerativeProvider(config: TypeProviderConfig) as this =
+    inherit
+        TypeProviderForNamespaces(
+            config,
+            assemblyReplacementMap = [ ("RdfProvider.DesignTime", "RdfProvider.Runtime") ]
+        )
 
-    let ns = "MyNamespace"
-    let asm = Assembly.GetExecutingAssembly()
+    let ns = NameSpace.ofString "RdfProvider"
 
+    let createRootType (typeName, schemaPath: string) =
+        let tempAssembly = ProvidedAssembly()
+
+        let schema = RdfSchema.Load(schemaPath)
+
+        let rootType =
+            ProvidedTypeDefinition(
+                tempAssembly,
+                NameSpace.toString ns,
+                typeName,
+                baseType = Some typeof<obj>,
+                hideObjectMethods = true,
+                isErased = false
+            )
+
+        let mutable typeCache = Map.empty<string, Type>
+
+        let enumerators =
+            schema.NamedIndividuals
+            |> Array.map (fun x ->
+                Label.ofString x.HasUniqueTextIdentifier,
+                match x.Definition with
+                | Some d -> Documentation.ofString d
+                | None -> Documentation.ofString (x.PrefLabels |> Array.head))
+            |> Map.ofArray
+
+        let name = schema.Ontology.Filename.Value.Replace(".rdf", "") |> Name.ofString
+        let documentation = schema.Ontology.Label |> Documentation.ofString
+
+        let providedType =
+            createEnumerationType tempAssembly ns name documentation enumerators
+
+        match providedType with
+        | Ok providedType ->
+            typeCache <- typeCache |> Map.add (Name.toString name) providedType
+            rootType.AddMember providedType
+        | Error errors -> failwithf "%A" errors
+
+        tempAssembly.AddTypes [ rootType ]
+        rootType
+
+    let assembly = Assembly.GetExecutingAssembly()
     // check we contain a copy of runtime files, and are not referencing the runtime DLL
-    do assert (typeof<DataSource>.Assembly.GetName().Name = asm.GetName().Name)  
+    do assert (typeof<RdfProvider.Runtime>.Assembly.GetName().Name = assembly.GetName().Name)
 
-    let createTypes () =
-        let myType = ProvidedTypeDefinition(asm, ns, "MyType", Some typeof<obj>)
+    let cache = ConcurrentDictionary<string, Lazy<ProvidedTypeDefinition>>()
 
-        let ctor = ProvidedConstructor([], invokeCode = fun args -> <@@ "My internal state" :> obj @@>)
-        myType.AddMember(ctor)
+    let rootType =
+        let rootType =
+            ProvidedTypeDefinition(
+                assembly,
+                NameSpace.toString ns,
+                "RdfProvider",
+                Some typeof<obj>,
+                hideObjectMethods = true,
+                isErased = false
+            )
 
-        let ctor2 = ProvidedConstructor([ProvidedParameter("InnerState", typeof<string>)], invokeCode = fun args -> <@@ (%%(args.[0]):string) :> obj @@>)
-        myType.AddMember(ctor2)
+        let staticParams = [ ProvidedStaticParameter("Schema", typeof<string>) ]
 
-        let innerState = ProvidedProperty("InnerState", typeof<string>, getterCode = fun args -> <@@ (%%(args.[0]) :> obj) :?> string @@>)
-        myType.AddMember(innerState)
+        rootType.AddXmlDoc
+            """
+        <summary>Rdf Provider types based on rdf schema file.</summary>
+        <param name='SchemaFile'>The full path to the schema file to base this provider on.</param>
+        """
 
-        let meth = ProvidedMethod("StaticMethod", [], typeof<DataSource>, isStatic=true, invokeCode = (fun args -> Expr.Value(null, typeof<DataSource>)))
-        myType.AddMember(meth)
+        rootType.DefineStaticParameters(
+            parameters = staticParams,
+            instantiationFunction =
+                fun typeName args ->
+                    cache
+                        .GetOrAdd(
+                            typeName,
+                            lazy (createRootType (typeName, (string args.[0])))
+                        )
+                        .Value
+        )
 
-        let nameOf =
-            let param = ProvidedParameter("p", typeof<Expr<int>>)
-            param.AddCustomAttribute {
-                new CustomAttributeData() with
-                    member __.Constructor = typeof<ReflectedDefinitionAttribute>.GetConstructor([||])
-                    member __.ConstructorArguments = [||] :> _
-                    member __.NamedArguments = [||] :> _
-            }
-            ProvidedMethod("NameOf", [ param ], typeof<string>, isStatic = true, invokeCode = fun args ->
-                <@@
-                    match (%%args.[0]) : Expr<int> with
-                    | Microsoft.FSharp.Quotations.Patterns.ValueWithName (_, _, n) -> n
-                    | e -> failwithf "Invalid quotation argument (expected ValueWithName): %A" e
-                @@>)
-        myType.AddMember(nameOf)
+        rootType
 
-        [myType]
-
-    do
-        this.AddNamespace(ns, createTypes())
-
-[<TypeProvider>]
-type BasicGenerativeProvider (config : TypeProviderConfig) as this =
-    inherit TypeProviderForNamespaces (config, assemblyReplacementMap=[("RdfProvider.DesignTime", "RdfProvider.Runtime")])
-
-    let ns = "RdfProvider"
-    let asm = Assembly.GetExecutingAssembly()
-
-    // check we contain a copy of runtime files, and are not referencing the runtime DLL
-    do assert (typeof<DataSource>.Assembly.GetName().Name = asm.GetName().Name)  
-
-    let createType typeName (count:int) =
-        let asm = ProvidedAssembly()
-        let myType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>, isErased=false)
-
-        let ctor = ProvidedConstructor([], invokeCode = fun args -> <@@ "My internal state" :> obj @@>)
-        myType.AddMember(ctor)
-
-        let ctor2 = ProvidedConstructor([ProvidedParameter("InnerState", typeof<string>)], invokeCode = fun args -> <@@ (%%(args.[1]):string) :> obj @@>)
-        myType.AddMember(ctor2)
-
-        for i in 1 .. count do 
-            let prop = ProvidedProperty("Property" + string i, typeof<int>, getterCode = fun args -> <@@ i @@>)
-            myType.AddMember(prop)
-
-        let meth = ProvidedMethod("StaticMethod", [], typeof<DataSource>, isStatic=true, invokeCode = (fun args -> Expr.Value(null, typeof<DataSource>)))
-        myType.AddMember(meth)
-        asm.AddTypes [ myType ]
-
-        myType
-
-    let myParamType = 
-        let t = ProvidedTypeDefinition(asm, ns, "GenerativeProvider", Some typeof<obj>, isErased=false)
-        t.DefineStaticParameters( [ProvidedStaticParameter("Count", typeof<int>)], fun typeName args -> createType typeName (unbox<int> args.[0]))
-        t
-    do
-        this.AddNamespace(ns, [myParamType])
-
+    do this.AddNamespace(NameSpace.toString ns, [ rootType ])

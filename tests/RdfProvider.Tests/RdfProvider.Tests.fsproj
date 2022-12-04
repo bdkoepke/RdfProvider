@@ -1,14 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="RdfProvider.Tests.fs" />
     <None Include="paket.references" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\RdfProvider.Runtime\RdfProvider.Runtime.fsproj" />
+    <ProjectReference Include="..\..\src\RdfProvider.Runtime\RdfProvider.Runtime.fsproj"/>
+    <ProjectReference Include="..\..\src\RdfProvider.Schema\RdfProvider.Schema.fsproj" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

@@ -1,4 +1,4 @@
-namespace MyNamespace
+namespace RdfProvider
 
 open FSharp.Core.CompilerServices
 
