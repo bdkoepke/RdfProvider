@@ -1,10 +1,11 @@
 module RdfProviderTests
 
+open System
 open NUnit.Framework
 open RdfProvider
 
-type private PricingSource = RdfProvider<Schema="http://www.omg.org/spec/FIGI/20150501/PricingSources.rdf">
-type private SecurityType = RdfProvider<Schema="http://www.omg.org/spec/FIGI/20150501/SecurityTypes.rdf">
+type PricingSource = RdfProvider<Schema="http://www.omg.org/spec/FIGI/20150501/PricingSources.rdf">
+type SecurityType = RdfProvider<Schema="http://www.omg.org/spec/FIGI/20150501/SecurityTypes.rdf">
 
 [<Test>]
 let ``Should have currency future security type`` () =

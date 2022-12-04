@@ -81,23 +81,24 @@ type BasicGenerativeProvider(config: TypeProviderConfig) as this =
         )
 
     let ns = NameSpace.ofString "RdfProvider"
+    let asm = Assembly.GetExecutingAssembly()
+    // check we contain a copy of runtime files, and are not referencing the runtime DLL
+    do assert (typeof<RdfProvider.Runtime>.Assembly.GetName().Name = asm.GetName().Name)
 
-    let createRootType (typeName, schemaPath: string) =
-        let tempAssembly = ProvidedAssembly()
+    let createRootType typeName (schemaPath: string) =
+        let asm = ProvidedAssembly()
 
         let schema = RdfSchema.Load(schemaPath)
 
         let rootType =
             ProvidedTypeDefinition(
-                tempAssembly,
+                asm,
                 NameSpace.toString ns,
                 typeName,
                 baseType = Some typeof<obj>,
                 hideObjectMethods = true,
                 isErased = false
             )
-
-        let mutable typeCache = Map.empty<string, Type>
 
         let enumerators =
             schema.NamedIndividuals
@@ -111,36 +112,25 @@ type BasicGenerativeProvider(config: TypeProviderConfig) as this =
         let name = schema.Ontology.Filename.Value.Replace(".rdf", "") |> Name.ofString
         let documentation = schema.Ontology.Label |> Documentation.ofString
 
-        let providedType =
-            createEnumerationType tempAssembly ns name documentation enumerators
+        let providedType = createEnumerationType asm ns name documentation enumerators
 
         match providedType with
-        | Ok providedType ->
-            typeCache <- typeCache |> Map.add (Name.toString name) providedType
-            rootType.AddMember providedType
+        | Ok providedType -> rootType.AddMember providedType
         | Error errors -> failwithf "%A" errors
 
-        tempAssembly.AddTypes [ rootType ]
+        asm.AddTypes [ rootType ]
         rootType
-
-    let assembly = Assembly.GetExecutingAssembly()
-    // check we contain a copy of runtime files, and are not referencing the runtime DLL
-    do assert (typeof<RdfProvider.Runtime>.Assembly.GetName().Name = assembly.GetName().Name)
-
-    let cache = ConcurrentDictionary<string, Lazy<ProvidedTypeDefinition>>()
 
     let rootType =
         let rootType =
             ProvidedTypeDefinition(
-                assembly,
+                asm,
                 NameSpace.toString ns,
                 "RdfProvider",
                 Some typeof<obj>,
                 hideObjectMethods = true,
                 isErased = false
             )
-
-        let staticParams = [ ProvidedStaticParameter("Schema", typeof<string>) ]
 
         rootType.AddXmlDoc
             """
@@ -149,15 +139,8 @@ type BasicGenerativeProvider(config: TypeProviderConfig) as this =
         """
 
         rootType.DefineStaticParameters(
-            parameters = staticParams,
-            instantiationFunction =
-                fun typeName args ->
-                    cache
-                        .GetOrAdd(
-                            typeName,
-                            lazy (createRootType (typeName, (string args.[0])))
-                        )
-                        .Value
+            parameters = [ ProvidedStaticParameter("Schema", typeof<string>) ],
+            instantiationFunction = fun typeName args -> createRootType typeName (string args.[0])
         )
 
         rootType

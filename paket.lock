@@ -3,12 +3,6 @@ NUGET
     FSharp.Core (6.0.7)
     FSharp.Data (5.0.2)
       FSharp.Core (>= 5.0.1) - restriction: >= netstandard2.0
-    Microsoft.NETCore.Platforms (7.0) - restriction: >= net461
-    NETStandard.Library (2.0.3) - restriction: >= net461
-      Microsoft.NETCore.Platforms (>= 1.1) - restriction: || (&& (>= net45) (< netstandard1.3)) (&& (< net45) (>= netstandard1.1) (< netstandard1.2) (< win8)) (&& (< net45) (>= netstandard1.2) (< netstandard1.3) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.3) (< netstandard1.4) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.4) (< netstandard1.5) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.5) (< netstandard1.6) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.6) (< netstandard2.0) (< win8) (< wpa81)) (&& (< net45) (>= netstandard2.0)) (&& (>= net46) (< netstandard1.4)) (>= net461) (>= netcoreapp2.0) (&& (>= netstandard1.0) (< portable-net45+win8+wpa81)) (&& (< netstandard1.0) (>= portable-net45+win8) (< win8)) (&& (< netstandard1.0) (< portable-net45+win8) (>= portable-net45+win8+wpa81)) (&& (< netstandard1.0) (>= portable-net45+win8+wp8+wpa81) (< portable-net45+win8+wpa81)) (&& (< netstandard1.0) (>= win8)) (&& (< netstandard1.3) (< win8) (>= wpa81)) (&& (< netstandard1.5) (>= uap10.0)) (>= uap10.1) (>= wp8)
-    NETStandard.Library.NETFramework (2.0.0-preview2-25405-01)
-      Microsoft.NETCore.Platforms (>= 2.0.0-preview2-25405-01) - restriction: >= net461
-      NETStandard.Library (>= 2.0.0-preview2-25401-01) - restriction: >= net461
 GITHUB
   remote: fsprojects/FSharp.TypeProviders.SDK
     src/ProvidedTypes.fs (6ad1174db0794a348f4a1c0aa5a60ae3f1803810)
